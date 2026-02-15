@@ -38,7 +38,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- LÓGICA ---
+# --- LÓGICA DE LIMPEZA ---
 def limpar_texto(t):
     if not isinstance(t, str): return str(t)
     return ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').lower().strip()
@@ -48,14 +48,31 @@ def inicio_tabela(txt):
         if 'Bairro' in l and ('Valor' in l or 'Preço' in l or 'Venda' in l): return i
     return 0
 
-# Função Auxiliar para Pegar Números Seguros
-def safe_num(val):
-    try:
-        if pd.isna(val) or val == "": return 0
-        if isinstance(val, str):
-            val = val.replace(',', '.')
-        return float(val)
-    except: return 0
+# --- NOVO: EXTRATOR NINJA DE ÁREA E QUARTOS ---
+def extrair_info_ninja(row):
+    texto = ' '.join(row.astype(str)).lower()
+    
+    # 1. Tentar pegar Quartos
+    qtos = re.search(r'(\d+)\s?(quartos|qto|dorm)', texto)
+    qtos_val = qtos.group(1) if qtos else "0"
+    
+    # 2. Tentar pegar Vagas
+    vagas = re.search(r'(\d+)\s?(vaga|garagem|vg)', texto)
+    vagas_val = vagas.group(1) if vagas else "0"
+    
+    # 3. Tentar pegar Área (m2) - Pega o número antes de m2 ou m²
+    area = re.search(r'([\d,.]+)\s?(m2|m²|metr)', texto)
+    if area:
+        area_val = area.group(1).replace(',', '.')
+        try:
+            # Limpa pontos de milhar se existirem (ex: 1.200,50)
+            if area_val.count('.') > 1: area_val = area_val.replace('.', '', area_val.count('.') - 1)
+            area_val = f"{float(area_val):.0f}m²"
+        except: area_val = "-"
+    else:
+        area_val = "-"
+        
+    return qtos_val, area_val, vagas_val
 
 @st.cache_data(ttl=3600)
 def carregar_dados(uf):
@@ -68,7 +85,6 @@ def carregar_dados(uf):
         pular = inicio_tabela(txt)
         df = pd.read_csv(io.StringIO(txt), sep=';', skiprows=pular, on_bad_lines='skip')
         
-        # Normaliza Colunas
         cols = {c: limpar_texto(c) for c in df.columns}
         df.rename(columns=cols, inplace=True)
         
@@ -84,38 +100,18 @@ def carregar_dados(uf):
         df['Avaliacao'] = df[col_aval].apply(valor) if col_aval else df['Venda']
         df = df[df['Avaliacao'] > 0]
         
-        # --- INTELIGÊNCIA DE DADOS ---
+        # Inteligência
         df['Full_Text'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
-        
-        # Tipo
         df['Tipo'] = df['Full_Text'].apply(lambda x: 'APARTAMENTO' if 'apartamento' in x else ('CASA' if 'casa' in x else ('TERRENO' if 'terreno' in x else 'IMÓVEL')))
-        
-        # Ocupação e FGTS
         df['Sit'] = df['Full_Text'].apply(lambda x: 'Ocupado' if 'ocupado' in x and 'desocupado' not in x else ('Desocupado' if 'desocupado' in x else 'Indefinido'))
         df['FGTS'] = df['Full_Text'].apply(lambda x: True if 'fgts' in x else False)
         
-        # --- BUSCA DIRETA NAS COLUNAS (Sem Regex) ---
-        # Tenta achar colunas específicas
-        col_area_priv = next((c for c in df.columns if 'privati' in c and 'area' in c), None)
-        col_area_terr = next((c for c in df.columns if 'terreno' in c and 'area' in c), None)
-        col_quartos = next((c for c in df.columns if 'quarto' in c), None)
-        col_vagas = next((c for c in df.columns if 'vaga' in c), None)
+        # --- APLICA O EXTRATOR NINJA ---
+        ninja_data = df.apply(extrair_info_ninja, axis=1)
+        df['Qtos'] = [x[0] for x in ninja_data]
+        df['Area_Display'] = [x[1] for x in ninja_data]
+        df['Vagas'] = [x[2] for x in ninja_data]
         
-        # Aplica a extração direta
-        df['Area_Priv'] = df[col_area_priv].apply(safe_num) if col_area_priv else 0
-        df['Area_Terr'] = df[col_area_terr].apply(safe_num) if col_area_terr else 0
-        df['Qtos'] = df[col_quartos].apply(safe_num).astype(int) if col_quartos else 0
-        df['Vagas'] = df[col_vagas].apply(safe_num).astype(int) if col_vagas else 0
-        
-        # Define qual área mostrar (Se tiver área construída, mostra ela. Se não, mostra terreno)
-        def definir_area_display(row):
-            if row['Area_Priv'] > 0: return f"{row['Area_Priv']:.0f}m²"
-            if row['Area_Terr'] > 0: return f"{row['Area_Terr']:.0f}m² (Terr)"
-            return "-"
-        
-        df['Area_Display'] = df.apply(definir_area_display, axis=1)
-
-        # Modalidade e Data
         col_mod = next((c for c in df.columns if 'modalidade' in c), None)
         df['Mod'] = df[col_mod].astype(str).str.upper() if col_mod else "VENDA ONLINE"
         
