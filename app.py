@@ -8,7 +8,7 @@ import re
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Caça Leilão Pro", layout="wide", page_icon="💎")
 
-# --- CSS (VISUAL ARREMATA) ---
+# --- CSS (VISUAL ARREMATA BLINDADO) ---
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; font-family: 'Segoe UI', Roboto, sans-serif; }
@@ -48,15 +48,14 @@ def inicio_tabela(txt):
         if 'Bairro' in l and ('Valor' in l or 'Preço' in l or 'Venda' in l): return i
     return 0
 
-def extrair_detalhes(texto):
-    texto = str(texto).lower()
-    qtos = re.search(r'(\d+)\s?(quartos|qto)', texto)
-    qtos_val = qtos.group(1) if qtos else "-"
-    area = re.search(r'([\d,.]+)\s?m2', texto)
-    area_val = area.group(1) if area else "-"
-    vaga = re.search(r'(\d+)\s?vaga', texto)
-    vaga_val = vaga.group(1) if vaga else "-"
-    return qtos_val, area_val, vaga_val
+# Função Auxiliar para Pegar Números Seguros
+def safe_num(val):
+    try:
+        if pd.isna(val) or val == "": return 0
+        if isinstance(val, str):
+            val = val.replace(',', '.')
+        return float(val)
+    except: return 0
 
 @st.cache_data(ttl=3600)
 def carregar_dados(uf):
@@ -69,6 +68,7 @@ def carregar_dados(uf):
         pular = inicio_tabela(txt)
         df = pd.read_csv(io.StringIO(txt), sep=';', skiprows=pular, on_bad_lines='skip')
         
+        # Normaliza Colunas
         cols = {c: limpar_texto(c) for c in df.columns}
         df.rename(columns=cols, inplace=True)
         
@@ -84,18 +84,37 @@ def carregar_dados(uf):
         df['Avaliacao'] = df[col_aval].apply(valor) if col_aval else df['Venda']
         df = df[df['Avaliacao'] > 0]
         
-        # Inteligência
+        # --- INTELIGÊNCIA DE DADOS ---
         df['Full_Text'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
+        
+        # Tipo
         df['Tipo'] = df['Full_Text'].apply(lambda x: 'APARTAMENTO' if 'apartamento' in x else ('CASA' if 'casa' in x else ('TERRENO' if 'terreno' in x else 'IMÓVEL')))
+        
+        # Ocupação e FGTS
         df['Sit'] = df['Full_Text'].apply(lambda x: 'Ocupado' if 'ocupado' in x and 'desocupado' not in x else ('Desocupado' if 'desocupado' in x else 'Indefinido'))
         df['FGTS'] = df['Full_Text'].apply(lambda x: True if 'fgts' in x else False)
         
-        # Extrair Detalhes (Quartos, Vagas)
-        detalhes = df['Full_Text'].apply(extrair_detalhes)
-        df['Qtos'] = detalhes.apply(lambda x: x[0])
-        df['Area'] = detalhes.apply(lambda x: x[1])
-        df['Vagas'] = detalhes.apply(lambda x: x[2])
+        # --- BUSCA DIRETA NAS COLUNAS (Sem Regex) ---
+        # Tenta achar colunas específicas
+        col_area_priv = next((c for c in df.columns if 'privati' in c and 'area' in c), None)
+        col_area_terr = next((c for c in df.columns if 'terreno' in c and 'area' in c), None)
+        col_quartos = next((c for c in df.columns if 'quarto' in c), None)
+        col_vagas = next((c for c in df.columns if 'vaga' in c), None)
         
+        # Aplica a extração direta
+        df['Area_Priv'] = df[col_area_priv].apply(safe_num) if col_area_priv else 0
+        df['Area_Terr'] = df[col_area_terr].apply(safe_num) if col_area_terr else 0
+        df['Qtos'] = df[col_quartos].apply(safe_num).astype(int) if col_quartos else 0
+        df['Vagas'] = df[col_vagas].apply(safe_num).astype(int) if col_vagas else 0
+        
+        # Define qual área mostrar (Se tiver área construída, mostra ela. Se não, mostra terreno)
+        def definir_area_display(row):
+            if row['Area_Priv'] > 0: return f"{row['Area_Priv']:.0f}m²"
+            if row['Area_Terr'] > 0: return f"{row['Area_Terr']:.0f}m² (Terr)"
+            return "-"
+        
+        df['Area_Display'] = df.apply(definir_area_display, axis=1)
+
         # Modalidade e Data
         col_mod = next((c for c in df.columns if 'modalidade' in c), None)
         df['Mod'] = df[col_mod].astype(str).str.upper() if col_mod else "VENDA ONLINE"
@@ -117,7 +136,6 @@ with st.sidebar:
     df, msg = carregar_dados(uf)
     
     if df is not None:
-        # Botão EXPORTAR (Pedido na imagem)
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Exportar Planilha Excel/CSV", data=csv, file_name=f"imoveis_{uf}.csv", mime="text/csv")
         
@@ -151,7 +169,6 @@ if df is not None:
     
     st.info(f"Encontrados: {len(f)} imóveis")
     
-    # CONSTRUÇÃO DO HTML (SEM INDENTAÇÃO PARA EVITAR ERROS)
     html = "<div class='card-container'>"
     base = "https://venda-imoveis.caixa.gov.br/sistema/detalhe-imovel.asp?hdnimovel="
     col_id = next((c for c in df.columns if 'numero' in c and 'imovel' in c), df.columns[0])
@@ -163,7 +180,6 @@ if df is not None:
         link = base + str(r[col_id])
         maps = f"https://www.google.com/maps/search/?api=1&query={r[col_end]}, {r[col_cid]}".replace(" ", "+")
         
-        # Lógica de Visualização
         status_html = ""
         if r['Sit'] == 'Ocupado': status_html = f"<div class='status-badge st-ocupado'>⛔ OCUPADO</div>"
         elif r['Sit'] == 'Desocupado': status_html = f"<div class='status-badge st-livre'>✅ DESOCUPADO</div>"
@@ -174,8 +190,7 @@ if df is not None:
         
         data_text = f"📅 {r['Data_Venda']}" if r['Data_Venda'] != "-" else "📅 Venda Online"
 
-        # ATENÇÃO: O HTML ABAIXO ESTÁ GRUDADO NA ESQUERDA DE PROPÓSITO
-        # ISSO PREVINE O STREAMLIT DE ACHAR QUE É CÓDIGO.
+        # HTML COLADO A ESQUERDA (NÃO MEXER NA FORMATAÇÃO)
         html += f"""
 <div class='imovel-card'>
 <div class='header-dark'><span>{r['Mod'][:25]}</span><span class='badge-discount'>-{r['Desc']:.0f}%</span></div>
@@ -185,7 +200,7 @@ if df is not None:
 <div class='card-title'>{r[col_bair]}</div>
 <div class='features-row'>
 <span>🛏️ {r['Qtos']}</span>
-<span>📏 {r['Area']}m²</span>
+<span>📏 {r['Area_Display']}</span>
 <span>🚗 {r['Vagas']}</span>
 </div>
 <div class='date-row'>{data_text}</div>
