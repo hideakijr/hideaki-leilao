@@ -8,8 +8,8 @@ import re
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Caça Leilão Pro", layout="wide", page_icon="💎")
 
-# --- CSS (ESTILO ARREMATA) ---
-st.markdown("""
+# --- CSS SEPARADO (PARA EVITAR ERROS) ---
+css_style = """
 <style>
     .stApp { background-color: #f1f5f9; font-family: 'Segoe UI', sans-serif; }
     .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; padding: 20px; }
@@ -23,4 +23,38 @@ st.markdown("""
     .analytics-row { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: bold; color: #059669; background: #ecfdf5; padding: 8px; border-radius: 6px; margin-bottom: 10px; }
     .map-actions { display: flex; gap: 5px; margin-bottom: 10px; }
     .btn-map { flex: 1; text-align: center; padding: 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; text-decoration: none; color: white; transition: opacity 0.2s; }
-    .btn-google { background-color: #
+    .btn-google { background-color: #4285F4; }
+    .btn-waze { background-color: #33ccff; color: #000; }
+    .price-section { background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .price-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: bold; }
+    .price-val { font-size: 1.4rem; color: #1e293b; font-weight: 900; }
+    .price-old { font-size: 0.8rem; color: #94a3b8; text-decoration: line-through; }
+    .btn-action { background: #2563eb; color: white !important; text-align: center; padding: 12px; font-weight: 700; text-transform: uppercase; text-decoration: none; font-size: 0.9rem; margin-top: 0; display: block; }
+    .btn-action:hover { background: #1d4ed8; }
+    .status-badge { position: absolute; top: 45px; right: 15px; font-size: 0.7rem; padding: 3px 8px; border-radius: 20px; font-weight: 800; text-transform: uppercase; z-index: 10; border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; }
+    .st-ocupado { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+</style>
+"""
+st.markdown(css_style, unsafe_allow_html=True)
+
+# --- FUNÇÕES ---
+def limpar_texto(t):
+    if not isinstance(t, str): return str(t)
+    return ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').lower().strip()
+
+def inicio_tabela(txt):
+    for i, l in enumerate(txt.split('\n')):
+        if 'Bairro' in l and ('Valor' in l or 'Preço' in l or 'Venda' in l): return i
+    return 0
+
+def extrair_medidas(row):
+    texto = ' '.join(row.astype(str)).lower()
+    
+    # Regex para capturar números
+    q = re.search(r'(\d+)\s*(quartos|qto|dorm)', texto)
+    v = re.search(r'(\d+)\s*(vaga|garagem|vg)', texto)
+    ac = re.search(r'(privativa|construida|util|real)\s*[:=]?\s*([\d,.]+)', texto)
+    at = re.search(r'(terreno|total|averbada)\s*[:=]?\s*([\d,.]+)', texto)
+    
+    def limpa(match):
+        if not
