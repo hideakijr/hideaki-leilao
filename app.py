@@ -12,7 +12,7 @@ st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; font-family: sans-serif; }
     .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 20px; }
-    .imovel-card { background: white; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    .imovel-card { background: white; border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: relative; }
     .header-dark { background: #1e293b; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: bold; }
     .badge-off { background: #ef4444; padding: 2px 6px; border-radius: 4px; }
     .card-body { padding: 15px; color: #334155; }
@@ -26,12 +26,14 @@ st.markdown("""
     .btn:hover { background: #1d4ed8; }
     .maps-row { display: flex; gap: 5px; margin-top: 10px; }
     .btn-map { flex: 1; text-align: center; padding: 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; text-decoration: none; }
+    .status-badge { position: absolute; top: 40px; right: 10px; font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; background: #fff; border: 1px solid #ccc; }
 </style>
 """, unsafe_allow_html=True)
 
 # 3. FUNÇÕES
 def limpar(val):
     if not isinstance(val, str): return val
+    # Remove R$, pontos de milhar e troca vírgula por ponto
     return val.replace('R$','').replace('.','').replace(',','.').strip()
 
 def get_medidas(texto):
@@ -55,7 +57,6 @@ def baixar_caixa(uf):
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=25)
         if r.status_code != 200: return None, f"Erro Caixa: {r.status_code}"
         
-        # Acha onde começa a tabela
         lines = r.content.decode('latin1').split('\n')
         start = 0
         for i, l in enumerate(lines):
@@ -65,23 +66,35 @@ def baixar_caixa(uf):
         
         df = pd.read_csv(io.StringIO('\n'.join(lines[start:])), sep=';', on_bad_lines='skip')
         
-        # Limpa colunas
+        # Limpeza e Padronização de Colunas
         cols = {c: c.lower().strip() for c in df.columns}
         df.rename(columns=cols, inplace=True)
         
-        # Acha colunas vitais
-        col_venda = next((c for c in df.columns if 'venda' in c or 'preco' in c), None)
+        # --- CORREÇÃO DO ERRO ---
+        # Procura coluna de preço, mas IGNORA colunas que tenham "modalidade" no nome
+        col_venda = next((c for c in df.columns if ('valor' in c or 'preco' in c or 'venda' in c) and 'modalidade' not in c), None)
         col_cidade = next((c for c in df.columns if 'cidade' in c), df.columns[0])
         
         if not col_venda: return None, "Erro: Coluna de preço não encontrada."
         
-        # Converte Preços
-        df['Venda'] = df[col_venda].apply(lambda x: float(limpar(x)) if isinstance(x, str) else x)
-        col_aval = next((c for c in df.columns if 'avaliacao' in c), None)
-        df['Avaliacao'] = df[col_aval].apply(lambda x: float(limpar(x)) if isinstance(x, str) else x) if col_aval else df['Venda']
-        df = df[df['Avaliacao'] > 0].copy()
+        # Conversão Segura (Try/Except dentro do apply)
+        def convert_safe(x):
+            try:
+                if isinstance(x, str):
+                    # Se tiver letras (exceto R$), assume erro e retorna 0
+                    if re.search(r'[a-zA-Z]', x.replace('R$', '')): return 0.0
+                    return float(limpar(x))
+                return float(x)
+            except: return 0.0
+
+        df['Venda'] = df[col_venda].apply(convert_safe)
         
-        # Processa Texto
+        col_aval = next((c for c in df.columns if 'avaliacao' in c), None)
+        df['Avaliacao'] = df[col_aval].apply(convert_safe) if col_aval else df['Venda']
+        
+        # Filtra apenas linhas válidas (Preço > 0)
+        df = df[df['Venda'] > 0].copy()
+        
         df['Full'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
         medidas = df['Full'].apply(get_medidas)
         df['Q'] = [m['q'] for m in medidas]
@@ -100,28 +113,24 @@ with st.sidebar:
     
     if st.button("🔄 Forçar Atualização"): st.cache_data.clear()
     
-    status_text = st.empty()
-    status_text.text("Conectando à Caixa...")
-    
     df, erro = baixar_caixa(uf)
     
     if df is not None:
-        status_text.success("Dados carregados!")
         col_cid = next((c for c in df.columns if 'cidade' in c), None)
-        cidades = sorted(df[col_cid].unique())
-        sel_cidade = st.selectbox("Cidade", ["Todas"] + cidades)
+        if col_cid:
+            cidades = sorted(df[col_cid].unique())
+            sel_cidade = st.selectbox("Cidade", ["Todas"] + cidades)
+        else:
+            sel_cidade = "Todas"
         desc_min = st.slider("Desconto Mínimo", 0, 95, 40)
     else:
-        status_text.error("Falha ao carregar.")
+        st.error("Erro ao carregar dados.")
 
-# 5. TELA PRINCIPAL (DEBUG)
+# 5. TELA PRINCIPAL
 if df is None:
-    st.error(f"⚠️ Não foi possível carregar os imóveis de {uf}.")
-    st.warning(f"Detalhe do erro: {erro}")
-    st.info("Tente selecionar outro estado ou clique em 'Forçar Atualização'.")
-
+    st.error(f"⚠️ Erro ao processar arquivo de {uf}.")
+    st.code(erro) # Mostra o erro técnico para sabermos o que é
 else:
-    # Filtros
     f = df.copy()
     col_cid = next((c for c in f.columns if 'cidade' in c), f.columns[0])
     if sel_cidade != "Todas": f = f[f[col_cid] == sel_cidade]
@@ -133,17 +142,14 @@ else:
     
     html = "<div class='card-container'>"
     
-    # Colunas dinâmicas
     col_bairro = next((c for c in f.columns if 'bairro' in c), '')
     col_end = next((c for c in f.columns if 'endereco' in c), '')
     col_id = next((c for c in f.columns if 'numero' in c and 'imovel' in c), '')
     
     for _, r in f.head(50).iterrows():
-        # Prepara dados
         tipo = "🏠 CASA" if "casa" in r['Full'] else ("🏢 APTO" if "apartamento" in r['Full'] else "🌳 TERRENO")
         end_map = f"{r[col_end]}, {r[col_cid]}".replace(" ", "+")
         
-        # Medidas
         feats = []
         if r['Q'] != "0": feats.append(f"🛏️ {r['Q']}")
         if r['AC'] > 0: feats.append(f"📐 {r['AC']}m²")
@@ -151,12 +157,16 @@ else:
         if r['V'] != "0": feats.append(f"🚗 {r['V']}")
         feat_html = " | ".join(feats) if feats else "⚠️ Ver Edital"
         
+        status = "OCUPADO" if "ocupado" in r['Full'] and "desocupado" not in r['Full'] else "LIVRE"
+        cor_status = "#fee2e2; color:#991b1b" if status == "OCUPADO" else "#dcfce7; color:#166534"
+        
         html += f"""
         <div class='imovel-card'>
             <div class='header-dark'>
                 <span>ONLINE</span>
                 <span class='badge-off'>-{r['Desc']:.0f}% OFF</span>
             </div>
+            <div style='position:absolute; top:40px; right:10px; font-size:0.6rem; padding:2px 8px; border-radius:10px; font-weight:bold; background:{cor_status}'>{status}</div>
             <div class='card-body'>
                 <div class='meta'>{tipo} • {r[col_cid]}</div>
                 <div class='title'>{r[col_bairro]}</div>
