@@ -23,12 +23,4 @@ st.markdown("""
     .analytics-row { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: bold; color: #059669; background: #ecfdf5; padding: 8px; border-radius: 6px; margin-bottom: 10px; }
     .map-actions { display: flex; gap: 5px; margin-bottom: 10px; }
     .btn-map { flex: 1; text-align: center; padding: 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; text-decoration: none; color: white; transition: opacity 0.2s; }
-    .btn-google { background-color: #4285F4; }
-    .btn-waze { background-color: #33ccff; color: #000; }
-    .price-section { background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
-    .price-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: bold; }
-    .price-val { font-size: 1.4rem; color: #1e293b; font-weight: 900; }
-    .price-old { font-size: 0.8rem; color: #94a3b8; text-decoration: line-through; }
-    .btn-action { background: #2563eb; color: white !important; text-align: center; padding: 12px; font-weight: 700; text-transform: uppercase; text-decoration: none; font-size: 0.9rem; margin-top: 0; display: block; }
-    .btn-action:hover { background: #1d4ed8; }
-    .status-badge { position: absolute; top: 45px; right: 15
+    .btn-google { background-color: #
