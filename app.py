@@ -10,33 +10,145 @@ st.set_page_config(page_title="Caça Leilão Pro", layout="wide", page_icon="�
 # --- CSS (Visual Arremata) ---
 st.markdown("""
 <style>
-    .stApp { background-color: #f3f4f6; font-family: 'Roboto', sans-serif; }
-    .card-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 10px; }
-    .imovel-card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #e5e7eb; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s; position: relative; }
-    .imovel-card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.12); border-color: #2563eb; }
-    .top-badges { display: flex; justify-content: space-between; background: #1f2937; padding: 8px 12px; color: white; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; }
-    .discount-badge { background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-weight: 800; }
-    .card-body { padding: 16px; color: #374151; }
-    .card-title { font-size: 0.95rem; font-weight: 800; color: #111827; margin-bottom: 4px; text-transform: uppercase; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .card-bairro { font-size: 0.85rem; color: #6b7280; margin-bottom: 12px; font-weight: 500; }
-    .price-section { margin: 15px 0; border-top: 1px dashed #e5e7eb; padding-top: 10px; }
-    .price-label { font-size: 0.7rem; color: #9ca3af; text-transform: uppercase; }
-    .price-old { text-decoration: line-through; color: #9ca3af; font-size: 0.85rem; margin-bottom: 2px; }
-    .price-new { font-size: 1.4rem; font-weight: 900; color: #111827; letter-spacing: -0.5px; }
-    .tags-container { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
-    .tag { font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; font-weight: bold; display: flex; align-items: center; gap: 4px; }
-    .tag-fgts { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .tag-return-high { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
-    .tag-return-med { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-    .btn-action { display: block; width: 100%; text-align: center; background: #2563eb; color: white !important; padding: 12px; text-decoration: none; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; transition: background 0.2s; }
+    .stApp { background-color: #f8fafc; font-family: 'Segoe UI', Roboto, sans-serif; }
+    
+    /* Grid Responsivo */
+    .card-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 25px;
+        padding: 20px;
+    }
+    
+    /* O Cartão */
+    .imovel-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 0.2s;
+        position: relative;
+    }
+    .imovel-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        border-color: #3b82f6;
+    }
+
+    /* Topo Escuro (Badge de Modalidade) */
+    .header-dark {
+        background: #1e293b;
+        color: white;
+        padding: 10px 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Etiqueta de Desconto Vermelha */
+    .badge-discount {
+        background-color: #ef4444;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 800;
+    }
+
+    /* Corpo do Card */
+    .card-body { padding: 18px; color: #334155; }
+    
+    /* Tipo e Cidade */
+    .meta-info {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Bairro (Título) */
+    .card-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 4px;
+        line-height: 1.3;
+        height: 44px; /* Altura fixa para alinhar */
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    
+    /* Link Mapa */
+    .map-link a {
+        color: #3b82f6;
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .map-link a:hover { text-decoration: underline; }
+
+    /* Seção de Preço */
+    .price-section {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px dashed #cbd5e1;
+    }
+    .price-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: bold; }
+    .price-val { font-size: 1.5rem; color: #1e293b; font-weight: 900; letter-spacing: -0.5px; }
+    .price-old { font-size: 0.85rem; color: #94a3b8; text-decoration: line-through; }
+
+    /* Tags (Retorno, FGTS) */
+    .tags-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .tag { font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; font-weight: bold; }
+    .tag-blue { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+    .tag-green { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    
+    /* Botão */
+    .btn-action {
+        background: #2563eb;
+        color: white !important;
+        text-align: center;
+        padding: 14px;
+        font-weight: 700;
+        text-transform: uppercase;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
     .btn-action:hover { background: #1d4ed8; }
-    .status-float { position: absolute; top: 40px; right: 10px; font-size: 0.7rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .status-ocupado { background: #fee2e2; color: #991b1b; }
-    .status-livre { background: #dcfce7; color: #166534; }
+
+    /* Status Ocupação (Flutuante) */
+    .status-badge {
+        position: absolute;
+        top: 45px;
+        right: 15px;
+        font-size: 0.7rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 800;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        text-transform: uppercase;
+    }
+    .st-ocupado { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .st-livre { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
 </style>
 """, unsafe_allow_html=True)
 
-# --- LÓGICA ---
+# --- LÓGICA DE DADOS ---
 def limpar_texto(t):
     if not isinstance(t, str): return str(t)
     return ''.join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').lower().strip()
@@ -72,26 +184,50 @@ def carregar_dados(uf):
         df['Avaliacao'] = df[col_aval].apply(valor) if col_aval else df['Venda']
         df = df[df['Avaliacao'] > 0]
         
-        df['Texto'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
-        df['Sit'] = df['Texto'].apply(lambda x: 'Ocupado' if 'ocupado' in x and 'desocupado' not in x else ('Desocupado' if 'desocupado' in x else 'Indefinido'))
-        df['FGTS'] = df['Texto'].apply(lambda x: True if 'fgts' in x else False)
+        # --- INTELIGÊNCIA DE DADOS ---
+        # Cria um texto único com todas as colunas para busca
+        df['Full_Text'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
         
-        col_tipo = next((c for c in df.columns if 'tipo' in c and 'venda' not in c), None)
-        df['Tipo'] = df[col_tipo].str.split(',').str[0].str.upper().str.strip() if col_tipo else "IMÓVEL"
+        # 1. Detectar Tipo (Casa, Apto, Terreno)
+        def detectar_tipo(texto):
+            if 'apartamento' in texto: return 'APARTAMENTO'
+            if 'casa' in texto: return 'CASA'
+            if 'terreno' in texto: return 'TERRENO'
+            if 'comercial' in texto or 'loja' in texto: return 'COMERCIAL'
+            return 'IMÓVEL'
         
+        df['Tipo'] = df['Full_Text'].apply(detectar_tipo)
+
+        # 2. Detectar Modalidade (Leilão vs Venda)
         col_mod = next((c for c in df.columns if 'modalidade' in c), None)
-        df['Mod'] = df[col_mod].astype(str).str.upper() if col_mod else "VENDA ONLINE"
+        if col_mod:
+            df['Mod_Raw'] = df[col_mod].astype(str).str.lower()
+            def limpar_mod(t):
+                if '1' in t and 'leilao' in t: return "1º LEILÃO"
+                if '2' in t and 'leilao' in t: return "2º LEILÃO"
+                if 'direta' in t: return "VENDA DIRETA"
+                if 'online' in t: return "VENDA ONLINE"
+                return "LEILÃO / VENDA"
+            df['Mod'] = df['Mod_Raw'].apply(limpar_mod)
+        else:
+            df['Mod'] = "VENDA ONLINE"
+
+        # 3. Ocupação
+        df['Sit'] = df['Full_Text'].apply(lambda x: 'Ocupado' if 'ocupado' in x and 'desocupado' not in x else ('Desocupado' if 'desocupado' in x else 'Indefinido'))
         
+        # 4. FGTS
+        df['FGTS'] = df['Full_Text'].apply(lambda x: True if 'fgts' in x else False)
+
         return df, "Ok"
     except Exception as e: return None, str(e)
 
 # --- INTERFACE ---
-st.title("💎 Arremata Clone (Beta)")
+st.title("💎 Arremata Clone 2.0")
 
 with st.sidebar:
     st.header("Filtros")
     uf = st.selectbox("Estado", ["SP", "RJ", "MG", "PR", "SC", "RS", "BA", "GO", "DF"])
-    if st.button("🔄 Atualizar"): st.cache_data.clear()
+    if st.button("🔄 Atualizar Lista"): st.cache_data.clear()
     
     df, msg = carregar_dados(uf)
     
@@ -102,14 +238,14 @@ with st.sidebar:
         sel_cid = st.selectbox("Cidade", cidades)
         
         sel_sit = st.selectbox("Ocupação", ["Todas", "Ocupado", "Desocupado"])
-        sel_tipo = st.selectbox("Tipo", ["Todas"] + sorted(df['Tipo'].unique().tolist()))
-        max_v = st.number_input("Valor Máximo", 0)
-        desc_min = st.slider("Desconto Mínimo %", 0, 95, 40)
-        busca = st.text_input("Bairro")
+        sel_tipo = st.selectbox("Tipo de Imóvel", ["Todas"] + sorted(df['Tipo'].unique().tolist()))
+        max_v = st.number_input("Valor Máximo (R$)", 0)
+        desc_min = st.slider("Desconto Mínimo (%)", 0, 95, 40)
+        busca = st.text_input("Buscar Bairro")
     else:
         st.error(msg)
 
-# --- RENDER ---
+# --- CARDS ---
 if df is not None:
     f = df.copy()
     if sel_cid != "Todas": f = f[f[col_cid] == sel_cid]
@@ -123,7 +259,7 @@ if df is not None:
     f['Desc'] = ((f['Avaliacao'] - f['Venda']) / f['Avaliacao']) * 100
     f = f[f['Desc'] >= desc_min].sort_values('Desc', ascending=False)
     
-    st.info(f"Mostrando {len(f)} imóveis em destaque")
+    st.info(f"Encontrados: {len(f)} imóveis")
     
     html = "<div class='card-container'>"
     base = "https://venda-imoveis.caixa.gov.br/sistema/detalhe-imovel.asp?hdnimovel="
@@ -132,37 +268,38 @@ if df is not None:
     col_end = next((c for c in df.columns if 'endereco' in c), '')
 
     for _, r in f.head(50).iterrows():
-        discount = f"{r['Desc']:.0f}%"
-        modalidade = r['Mod'][:20]
-        
-        potencial_html = ""
-        if r['Desc'] > 50: potencial_html = "<div class='tag tag-return-high'>⚡ Retorno ALTO</div>"
-        elif r['Desc'] > 30: potencial_html = "<div class='tag tag-return-med'>📈 Retorno MÉDIO</div>"
-        
-        fgts_html = "<div class='tag tag-fgts'>✅ Aceita FGTS</div>" if r['FGTS'] else ""
-        
-        status_html = ""
-        if r['Sit'] == 'Ocupado': status_html = "<div class='status-float status-ocupado'>⛔ OCUPADO</div>"
-        elif r['Sit'] == 'Desocupado': status_html = "<div class='status-float status-livre'>✅ DESOCUPADO</div>"
-
+        # Variáveis Visuais
+        icon = "🏠" if r['Tipo'] == 'CASA' else "🏢" if r['Tipo'] == 'APARTAMENTO' else "🌳"
         link = base + str(r[col_id])
         maps = f"https://www.google.com/maps/search/?api=1&query={r[col_end]}, {r[col_cid]}".replace(" ", "+")
         
-        # AQUI ESTAVA O ERRO: Removi toda a indentação do HTML
+        # Tags HTML
+        status_html = ""
+        if r['Sit'] == 'Ocupado': status_html = f"<div class='status-badge st-ocupado'>⛔ OCUPADO</div>"
+        elif r['Sit'] == 'Desocupado': status_html = f"<div class='status-badge st-livre'>✅ DESOCUPADO</div>"
+        
+        tags_html = ""
+        if r['Desc'] > 50: tags_html += "<span class='tag tag-blue'>⚡ Retorno ALTO</span>"
+        if r['FGTS']: tags_html += "<span class='tag tag-green'>✅ Aceita FGTS</span>"
+
+        # HTML do Cartão (Sem indentação para evitar bugs)
         html += f"""
 <div class='imovel-card'>
-<div class='top-badges'><span>{modalidade}</span><span class='discount-badge'>{discount} OFF</span></div>
+<div class='header-dark'>
+<span>{r['Mod']}</span>
+<span class='badge-discount'>-{r['Desc']:.0f}% OFF</span>
+</div>
 {status_html}
 <div class='card-body'>
-<div style='font-size:0.75rem; color:#6b7280; font-weight:bold; margin-bottom:5px'>{r['Tipo']} • {r[col_cid]}</div>
+<div class='meta-info'>{icon} {r['Tipo']} • {r[col_cid]}</div>
 <div class='card-title'>{r[col_bair]}</div>
-<div class='card-bairro'><a href='{maps}' target='_blank' style='color:#2563eb; text-decoration:none'>📍 Ver no Mapa</a></div>
+<div class='map-link'><a href='{maps}' target='_blank'>📍 Ver Localização no Mapa</a></div>
 <div class='price-section'>
-<div class='price-label'>Valor de Venda</div>
-<div class='price-new'>R$ {r['Venda']:,.2f}</div>
-<div class='price-old'>Avaliado em: R$ {r['Avaliacao']:,.2f}</div>
+<div class='price-label'>Lance Mínimo</div>
+<div class='price-val'>R$ {r['Venda']:,.2f}</div>
+<div class='price-old'>Avaliação: R$ {r['Avaliacao']:,.2f}</div>
 </div>
-<div class='tags-container'>{potencial_html}{fgts_html}</div>
+<div class='tags-row'>{tags_html}</div>
 </div>
 <a href='{link}' target='_blank' class='btn-action'>VER DETALHES</a>
 </div>"""
@@ -171,4 +308,4 @@ if df is not None:
     st.markdown(html, unsafe_allow_html=True)
 
 elif df is None:
-    st.warning("Aguardando dados da Caixa...")
+    st.warning("Selecione um estado para carregar.")
