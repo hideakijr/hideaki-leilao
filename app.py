@@ -7,7 +7,7 @@ import re
 # 1. CONFIGURAÇÃO
 st.set_page_config(page_title="Caça Leilão Pro", layout="wide", page_icon="💎")
 
-# 2. CSS (ESTILO)
+# 2. CSS
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; font-family: sans-serif; }
@@ -33,7 +33,6 @@ st.markdown("""
 # 3. FUNÇÕES
 def limpar(val):
     if not isinstance(val, str): return val
-    # Remove R$, pontos de milhar e troca vírgula por ponto
     return val.replace('R$','').replace('.','').replace(',','.').strip()
 
 def get_medidas(texto):
@@ -65,23 +64,17 @@ def baixar_caixa(uf):
                 break
         
         df = pd.read_csv(io.StringIO('\n'.join(lines[start:])), sep=';', on_bad_lines='skip')
-        
-        # Limpeza e Padronização de Colunas
         cols = {c: c.lower().strip() for c in df.columns}
         df.rename(columns=cols, inplace=True)
         
-        # --- CORREÇÃO DO ERRO ---
-        # Procura coluna de preço, mas IGNORA colunas que tenham "modalidade" no nome
+        # Colunas Críticas
         col_venda = next((c for c in df.columns if ('valor' in c or 'preco' in c or 'venda' in c) and 'modalidade' not in c), None)
-        col_cidade = next((c for c in df.columns if 'cidade' in c), df.columns[0])
-        
         if not col_venda: return None, "Erro: Coluna de preço não encontrada."
         
-        # Conversão Segura (Try/Except dentro do apply)
+        # Conversão
         def convert_safe(x):
             try:
                 if isinstance(x, str):
-                    # Se tiver letras (exceto R$), assume erro e retorna 0
                     if re.search(r'[a-zA-Z]', x.replace('R$', '')): return 0.0
                     return float(limpar(x))
                 return float(x)
@@ -89,12 +82,16 @@ def baixar_caixa(uf):
 
         df['Venda'] = df[col_venda].apply(convert_safe)
         
+        # Avaliação (se não achar, usa Venda)
         col_aval = next((c for c in df.columns if 'avaliacao' in c), None)
-        df['Avaliacao'] = df[col_aval].apply(convert_safe) if col_aval else df['Venda']
-        
-        # Filtra apenas linhas válidas (Preço > 0)
+        if col_aval:
+            df['Avaliacao'] = df[col_aval].apply(convert_safe)
+        else:
+            df['Avaliacao'] = df['Venda'] # Fallback
+            
         df = df[df['Venda'] > 0].copy()
         
+        # Texto
         df['Full'] = df.apply(lambda x: ' '.join(x.astype(str)).lower(), axis=1)
         medidas = df['Full'].apply(get_medidas)
         df['Q'] = [m['q'] for m in medidas]
@@ -103,45 +100,44 @@ def baixar_caixa(uf):
         df['AT'] = [m['t'] for m in medidas]
         
         return df, "Ok"
-        
     except Exception as e: return None, str(e)
 
 # 4. SIDEBAR
 with st.sidebar:
     st.header("Painel de Controle")
     uf = st.selectbox("Estado", ["SP", "RJ", "MG", "PR", "SC", "RS", "BA", "GO", "DF"])
-    
     if st.button("🔄 Forçar Atualização"): st.cache_data.clear()
     
     df, erro = baixar_caixa(uf)
     
     if df is not None:
         col_cid = next((c for c in df.columns if 'cidade' in c), None)
-        if col_cid:
-            cidades = sorted(df[col_cid].unique())
-            sel_cidade = st.selectbox("Cidade", ["Todas"] + cidades)
-        else:
-            sel_cidade = "Todas"
-        desc_min = st.slider("Desconto Mínimo", 0, 95, 40)
+        cidades = sorted(df[col_cid].unique()) if col_cid else []
+        sel_cidade = st.selectbox("Cidade", ["Todas"] + cidades)
+        
+        # Mudei o padrão para 0 para você ver tudo primeiro
+        desc_min = st.slider("Desconto Mínimo", 0, 95, 0) 
     else:
         st.error("Erro ao carregar dados.")
 
 # 5. TELA PRINCIPAL
 if df is None:
-    st.error(f"⚠️ Erro ao processar arquivo de {uf}.")
-    st.code(erro) # Mostra o erro técnico para sabermos o que é
+    st.error(f"⚠️ Erro: {erro}")
 else:
     f = df.copy()
     col_cid = next((c for c in f.columns if 'cidade' in c), f.columns[0])
     if sel_cidade != "Todas": f = f[f[col_cid] == sel_cidade]
     
-    f['Desc'] = ((f['Avaliacao'] - f['Venda']) / f['Avaliacao']) * 100
+    # Recalcula desconto com segurança
+    f['Desc'] = 0
+    mask = f['Avaliacao'] > f['Venda']
+    f.loc[mask, 'Desc'] = ((f.loc[mask, 'Avaliacao'] - f.loc[mask, 'Venda']) / f.loc[mask, 'Avaliacao']) * 100
+    
     f = f[f['Desc'] >= desc_min].sort_values('Desc', ascending=False)
     
-    st.subheader(f"Encontrados: {len(f)} oportunidades em {uf}")
+    st.subheader(f"Encontrados: {len(f)} imóveis em {uf}")
     
     html = "<div class='card-container'>"
-    
     col_bairro = next((c for c in f.columns if 'bairro' in c), '')
     col_end = next((c for c in f.columns if 'endereco' in c), '')
     col_id = next((c for c in f.columns if 'numero' in c and 'imovel' in c), '')
@@ -171,12 +167,10 @@ else:
                 <div class='meta'>{tipo} • {r[col_cid]}</div>
                 <div class='title'>{r[col_bairro]}</div>
                 <div class='features'>{feat_html}</div>
-                
                 <div class='maps-row'>
                     <a href='https://maps.google.com/?q={end_map}' target='_blank' class='btn-map' style='background:#4285F4'>📍 Maps</a>
                     <a href='https://waze.com/ul?q={end_map}' target='_blank' class='btn-map' style='background:#33ccff;color:black'>🚙 Waze</a>
                 </div>
-                
                 <div class='price-box'>
                     <div style='display:flex;justify-content:space-between'>
                         <span style='font-size:0.7rem;font-weight:bold;color:#64748b'>LANCE MÍNIMO</span>
